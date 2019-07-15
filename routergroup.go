@@ -7,6 +7,7 @@ package gin
 import (
 	"net/http"
 	"path"
+	"reflect"
 	"regexp"
 	"strings"
 )
@@ -36,13 +37,20 @@ type IRoutes interface {
 	StaticFS(string, http.FileSystem) IRoutes
 }
 
+// Auto router struct which
+type AutoRouter struct {
+	AutoRouterGroup      map[string]map[string]string
+	AutoRouterController map[string]reflect.Type
+}
+
 // RouterGroup is used internally to configure router, a RouterGroup is associated with
 // a prefix and an array of handlers (middleware).
 type RouterGroup struct {
-	Handlers HandlersChain
-	basePath string
-	engine   *Engine
-	root     bool
+	Handlers   HandlersChain
+	autoRouter AutoRouter
+	basePath   string
+	engine     *Engine
+	root       bool
 }
 
 var _ IRouter = &RouterGroup{}
@@ -51,6 +59,25 @@ var _ IRouter = &RouterGroup{}
 func (group *RouterGroup) Use(middleware ...HandlerFunc) IRoutes {
 	group.Handlers = append(group.Handlers, middleware...)
 	return group.returnObj()
+}
+
+// Add methods name to AutoRouterGroup
+func (group *RouterGroup) AddToAutoRouterGroup(controllerName, method, methodName string) {
+	if group.autoRouter.AutoRouterGroup == nil {
+		group.autoRouter.AutoRouterGroup = make(map[string]map[string]string)
+	}
+	if group.autoRouter.AutoRouterGroup[controllerName] == nil {
+		group.autoRouter.AutoRouterGroup[controllerName] = make(map[string]string)
+	}
+	group.autoRouter.AutoRouterGroup[controllerName][method] = methodName
+}
+
+// Add controller name to AutoRouterController
+func (group *RouterGroup) AddToAutoRouterController(controllerName string, controller *reflect.Type) {
+	if group.autoRouter.AutoRouterController == nil {
+		group.autoRouter.AutoRouterController = make(map[string]reflect.Type)
+	}
+	group.autoRouter.AutoRouterController[controllerName] = *controller
 }
 
 // Group creates a new router group. You should add all the routes that have common middlewares or the same path prefix.

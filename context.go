@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -123,6 +124,14 @@ func (c *Context) HandlerNames() []string {
 // Handler returns the main handler.
 func (c *Context) Handler() HandlerFunc {
 	return c.handlers.Last()
+}
+
+func (c *Context) GetAutoRouterGroup() map[string]map[string]string {
+	return c.engine.RouterGroup.autoRouter.AutoRouterGroup
+}
+
+func (c *Context) GetAutoRouterController() *map[string]reflect.Type {
+	return &c.engine.RouterGroup.autoRouter.AutoRouterController
 }
 
 // FullPath returns a matched route full path. For not found routes
