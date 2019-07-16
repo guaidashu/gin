@@ -25,6 +25,7 @@ type IRoutes interface {
 	Handle(string, string, ...HandlerFunc) IRoutes
 	Any(string, ...HandlerFunc) IRoutes
 	GET(string, ...HandlerFunc) IRoutes
+	AutoRouter(controller interface{})
 	POST(string, ...HandlerFunc) IRoutes
 	DELETE(string, ...HandlerFunc) IRoutes
 	PATCH(string, ...HandlerFunc) IRoutes
@@ -54,6 +55,28 @@ type RouterGroup struct {
 }
 
 var _ IRouter = &RouterGroup{}
+
+var (
+	HTTPMETHOD = map[string]bool{
+		"GET":  true,
+		"POST": true,
+		//"PUT":       true,
+		//"DELETE":    true,
+		//"PATCH":     true,
+		//"OPTIONS":   true,
+		//"HEAD":      true,
+		//"TRACE":     true,
+		//"CONNECT":   true,
+		//"MKCOL":     true,
+		//"COPY":      true,
+		//"MOVE":      true,
+		//"PROPFIND":  true,
+		//"PROPPATCH": true,
+		//"LOCK":      true,
+		//"UNLOCK":    true,
+	}
+	exceptMethod = []string{"Mapping", "Init"}
+)
 
 // Use adds middleware to the group, see example code in GitHub.
 func (group *RouterGroup) Use(middleware ...HandlerFunc) IRoutes {
@@ -252,4 +275,48 @@ func (group *RouterGroup) returnObj() IRoutes {
 		return group.engine
 	}
 	return group
+}
+
+func (group *RouterGroup) AutoRouter(controller interface{}) {
+	/**
+	Auto Router
+	*/
+	prefix := "/"
+	reflectValue := reflect.ValueOf(controller)
+	// Get controller name
+	ct := reflect.Indirect(reflectValue).Type()
+	controllerOriginName := ct.Name()
+	controllerName := strings.TrimSuffix(controllerOriginName, "Controller")
+	controllerName = strings.ToLower(controllerName)
+	group.engine.AddToAutoRouterGroup(controllerName, "Controller", filterControllerName(reflectValue.Type().String()))
+	group.engine.AddToAutoRouterController(controllerName, &ct)
+	// Get methods name
+	reflectType := reflectValue.Type()
+	length := reflectType.NumMethod()
+	for i := 0; i < length; i++ {
+		methodsName := reflectType.Method(i).Name
+		if !InSlice(methodsName, exceptMethod) {
+			group.engine.AddToAutoRouterGroup(controllerName, strings.ToLower(methodsName), methodsName)
+			pattern := Join(prefix, controllerName, strings.ToLower(methodsName))
+			for m := range HTTPMETHOD {
+				group.engine.Handle(m, pattern, AutoRouteExecute)
+			}
+		}
+	}
+}
+
+func AutoRouteExecute(ctx *Context) {
+	httpPath := ctx.Request.URL.Path
+	httpPathArr := strings.Split(httpPath, "/")
+	// get controlle name
+	controllerName := httpPathArr[1]
+	// get method name
+	methodName := httpPathArr[2]
+	// spell controller name
+	routerGroup := ctx.GetAutoRouterGroup()
+	routerController := ctx.GetAutoRouterController()
+	controller := reflect.New((*routerController)[controllerName])
+	in := make([]reflect.Value, 1)
+	in[0] = reflect.ValueOf(ctx)
+	controller.MethodByName(routerGroup[controllerName][methodName]).Call(in)
 }
